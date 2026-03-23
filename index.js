@@ -142,10 +142,28 @@ function walkDir(baseDir, currentDir, regex, results, depth, maxDepth) {
 }
 
 // ── LM Studio config ──
-const LM_STUDIO_URL = "http://localhost:1234/v1/chat/completions";
-const LM_STUDIO_MODEL = process.env.LM_STUDIO_MODEL || "qwen2.5-coder-7b-instruct-mlx";
-const DEEPSEEK_MODEL = process.env.LM_DEEPSEEK_MODEL || "deepseek/deepseek-r1-0528-qwen3-8b";
+const LM_STUDIO_BASE = "http://localhost:1234";
+const LM_STUDIO_URL = `${LM_STUDIO_BASE}/v1/chat/completions`;
+const LM_STUDIO_MODELS_URL = `${LM_STUDIO_BASE}/v1/models`;
+const PREFERRED_MODEL = process.env.LM_STUDIO_MODEL || "qwen2.5-coder-7b-instruct-mlx";
+const PREFERRED_DEEPSEEK = process.env.LM_DEEPSEEK_MODEL || "deepseek/deepseek-r1-0528-qwen3-8b";
 const MAX_STEPS = 10;
+
+// ── Auto-detect loaded model ──
+// Queries /api/v0/models (native LM Studio API) to find models with state="loaded".
+// Returns preferred if it's loaded, otherwise the first loaded model found.
+async function getLoadedModel(preferred) {
+  try {
+    const res = await axios.get(`${LM_STUDIO_BASE}/api/v0/models`, { timeout: 5000 });
+    const models = Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
+    const loaded = models.filter((m) => m.state === "loaded").map((m) => m.id);
+    if (loaded.length === 0) throw new Error("No models currently loaded in LM Studio");
+    const match = loaded.find((id) => id === preferred);
+    return match ?? loaded[0];
+  } catch (err) {
+    return preferred;
+  }
+}
 
 // 1. Initialize the MCP Server
 const server = new Server(
@@ -245,10 +263,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       ];
 
       let finalContent = null;
+      const activeModel = await getLoadedModel(PREFERRED_MODEL);
 
       for (let step = 0; step < MAX_STEPS; step++) {
         const response = await axios.post(LM_STUDIO_URL, {
-          model: LM_STUDIO_MODEL,
+          model: activeModel,
           messages,
           temperature: 0.1,
           tools: FILESYSTEM_TOOLS,
@@ -364,10 +383,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       ];
 
       let finalContent = null;
+      const activeModel = await getLoadedModel(PREFERRED_MODEL);
 
       for (let step = 0; step < MAX_STEPS; step++) {
         const response = await axios.post(LM_STUDIO_URL, {
-          model: LM_STUDIO_MODEL,
+          model: activeModel,
           messages,
           temperature: 0.1,
           tools: FILESYSTEM_TOOLS,
@@ -484,10 +504,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       ];
 
       let finalContent = null;
+      const activeModel = await getLoadedModel(PREFERRED_DEEPSEEK);
 
       for (let step = 0; step < MAX_STEPS; step++) {
         const response = await axios.post(LM_STUDIO_URL, {
-          model: DEEPSEEK_MODEL,
+          model: activeModel,
           messages,
           temperature: 0.1,
           tools: FILESYSTEM_TOOLS,
