@@ -148,6 +148,7 @@ const LM_STUDIO_MODELS_URL = `${LM_STUDIO_BASE}/v1/models`;
 const PREFERRED_MODEL = process.env.LM_STUDIO_MODEL || "qwen2.5-coder-7b-instruct-mlx";
 const PREFERRED_DEEPSEEK = process.env.LM_DEEPSEEK_MODEL || "deepseek/deepseek-r1-0528-qwen3-8b";
 const MAX_STEPS = 10;
+const LLM_TIMEOUT = 180_000; // 3 minutes per LLM call
 
 // ── Auto-detect loaded model ──
 // Queries /api/v0/models (native LM Studio API) to find models with state="loaded".
@@ -271,7 +272,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           messages,
           temperature: 0.1,
           tools: FILESYSTEM_TOOLS,
-        });
+        }, { timeout: LLM_TIMEOUT });
 
         const choice = response.data?.choices?.[0];
         const message = choice?.message;
@@ -391,7 +392,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           messages,
           temperature: 0.1,
           tools: FILESYSTEM_TOOLS,
-        });
+        }, { timeout: LLM_TIMEOUT });
 
         const choice = response.data?.choices?.[0];
         const message = choice?.message;
@@ -512,7 +513,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           messages,
           temperature: 0.1,
           tools: FILESYSTEM_TOOLS,
-        });
+        }, { timeout: LLM_TIMEOUT });
 
         const choice = response.data?.choices?.[0];
         const message = choice?.message;
