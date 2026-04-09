@@ -141,26 +141,26 @@ function walkDir(baseDir, currentDir, regex, results, depth, maxDepth) {
   } catch (_) { /* skip unreadable dirs */ }
 }
 
-// ── LM Studio config ──
-const LM_STUDIO_BASE = "http://localhost:1234";
-const LM_STUDIO_URL = `${LM_STUDIO_BASE}/v1/chat/completions`;
-const LM_STUDIO_MODELS_URL = `${LM_STUDIO_BASE}/v1/models`;
-const PREFERRED_MODEL = process.env.LM_STUDIO_MODEL || "qwen2.5-coder-7b-instruct-mlx";
-const PREFERRED_DEEPSEEK = process.env.LM_DEEPSEEK_MODEL || "deepseek/deepseek-r1-0528-qwen3-8b";
+// ── Ollama config ──
+const OLLAMA_BASE = "http://localhost:11434";
+const OLLAMA_URL = `${OLLAMA_BASE}/v1/chat/completions`;
+const OLLAMA_MODELS_URL = `${OLLAMA_BASE}/v1/models`;
+const PREFERRED_MODEL = process.env.OLLAMA_MODEL || "qwen3-coder-next:latest";
+const PREFERRED_DEEPSEEK = process.env.OLLAMA_DEEPSEEK_MODEL || "deepseek-r1:latest";
 const MAX_STEPS = 10;
 const LLM_TIMEOUT = 180_000; // 3 minutes per LLM call
 
-// ── Auto-detect loaded model ──
-// Queries /api/v0/models (native LM Studio API) to find models with state="loaded".
-// Returns preferred if it's loaded, otherwise the first loaded model found.
+// ── Auto-detect available model ──
+// Queries Ollama /v1/models to find available models.
+// Returns preferred if available, otherwise the first model found.
 async function getLoadedModel(preferred) {
   try {
-    const res = await axios.get(`${LM_STUDIO_BASE}/api/v0/models`, { timeout: 5000 });
-    const models = Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
-    const loaded = models.filter((m) => m.state === "loaded").map((m) => m.id);
-    if (loaded.length === 0) throw new Error("No models currently loaded in LM Studio");
-    const match = loaded.find((id) => id === preferred);
-    return match ?? loaded[0];
+    const res = await axios.get(OLLAMA_MODELS_URL, { timeout: 5000 });
+    const models = Array.isArray(res.data?.data) ? res.data.data : [];
+    const available = models.map((m) => m.id);
+    if (available.length === 0) throw new Error("No models available in Ollama");
+    const match = available.find((id) => id === preferred);
+    return match ?? available[0];
   } catch (err) {
     return preferred;
   }
@@ -178,7 +178,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "ask_lm_studio_docs",
       description:
-        "Ask a specific question or summarize requirements from local markdown documentation via LM Studio.",
+        "Ask a specific question or summarize requirements from local markdown documentation via Ollama.",
       inputSchema: {
         type: "object",
         properties: {
@@ -194,7 +194,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "git_review",
       description:
-        "Review uncommitted code changes (git diff) using LM Studio. Analyzes what changed, checks for bugs, regressions, and issues.",
+        "Review uncommitted code changes (git diff) using Ollama. Analyzes what changed, checks for bugs, regressions, and issues.",
       inputSchema: {
         type: "object",
         properties: {
@@ -267,7 +267,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const activeModel = await getLoadedModel(PREFERRED_MODEL);
 
       for (let step = 0; step < MAX_STEPS; step++) {
-        const response = await axios.post(LM_STUDIO_URL, {
+        const response = await axios.post(OLLAMA_URL, {
           model: activeModel,
           messages,
           temperature: 0.1,
@@ -279,7 +279,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         if (!message) {
           return {
-            content: [{ type: "text", text: "LM Studio returned no readable message." }],
+            content: [{ type: "text", text: "Ollama returned no readable message." }],
             isError: true,
           };
         }
@@ -321,16 +321,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       if (finalContent === null) {
         return {
-          content: [{ type: "text", text: "LM Studio reached max steps without a final answer." }],
+          content: [{ type: "text", text: "Ollama reached max steps without a final answer." }],
           isError: true,
         };
       }
 
       return { content: [{ type: "text", text: finalContent }] };
     } catch (error) {
-      let errorMessage = "Unknown error communicating with LM Studio.";
+      let errorMessage = "Unknown error communicating with Ollama.";
       if (axios.isAxiosError(error)) {
-        errorMessage = `LM Studio Error: ${error.response?.data?.error?.message || error.message}. Is LM Studio running on port 1234?`;
+        errorMessage = `Ollama Error: ${error.response?.data?.error?.message || error.message}. Is Ollama running on port 11434?`;
       } else if (error instanceof Error) {
         errorMessage = `Internal Error: ${error.message}`;
       }
@@ -387,7 +387,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const activeModel = await getLoadedModel(PREFERRED_MODEL);
 
       for (let step = 0; step < MAX_STEPS; step++) {
-        const response = await axios.post(LM_STUDIO_URL, {
+        const response = await axios.post(OLLAMA_URL, {
           model: activeModel,
           messages,
           temperature: 0.1,
@@ -399,7 +399,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         if (!message) {
           return {
-            content: [{ type: "text", text: "LM Studio returned no readable message." }],
+            content: [{ type: "text", text: "Ollama returned no readable message." }],
             isError: true,
           };
         }
@@ -438,16 +438,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       if (finalContent === null) {
         return {
-          content: [{ type: "text", text: "LM Studio reached max steps without a final answer." }],
+          content: [{ type: "text", text: "Ollama reached max steps without a final answer." }],
           isError: true,
         };
       }
 
       return { content: [{ type: "text", text: finalContent }] };
     } catch (error) {
-      let errorMessage = "Unknown error communicating with LM Studio.";
+      let errorMessage = "Unknown error communicating with Ollama.";
       if (axios.isAxiosError(error)) {
-        errorMessage = `LM Studio Error: ${error.response?.data?.error?.message || error.message}. Is LM Studio running on port 1234?`;
+        errorMessage = `Ollama Error: ${error.response?.data?.error?.message || error.message}. Is Ollama running on port 11434?`;
       } else if (error instanceof Error) {
         errorMessage = `Internal Error: ${error.message}`;
       }
@@ -484,91 +484,85 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         diff = diff.slice(0, 10000) + "\n\n... (truncated)";
       }
 
-      let messages = [
-        {
-          role: "system",
-          content:
-            "You are an expert code reviewer. You will receive a git diff of uncommitted changes. " +
-            "Your job is to provide implementation feedback ONLY — do NOT suggest rewriting code. " +
-            "Focus on:\n" +
-            "- Code quality patterns and anti-patterns\n" +
-            "- Modularity and reuse opportunities\n" +
-            "- Readability and maintainability concerns\n" +
-            "- Naming conventions consistency\n" +
-            "- Potential edge cases or missing validations\n" +
-            "Be concise. Comment only on real issues, not style nitpicks. " +
-            "You also have access to filesystem tools (list_directory, read_file, search_files, git_diff) " +
-            "to read additional project files if needed for context. " +
-            "The project is located at: '" + cwd + "'.",
-        },
-        { role: "user", content: `${query}\n\nHere is the git diff:\n\`\`\`\n${diff}\n\`\`\`` },
-      ];
+      const systemPrompt =
+        "You are an expert code reviewer. You will receive a git diff of uncommitted changes. " +
+        "Your job is to provide implementation feedback ONLY — do NOT suggest rewriting code. " +
+        "Focus on:\n" +
+        "- Code quality patterns and anti-patterns\n" +
+        "- Modularity and reuse opportunities\n" +
+        "- Readability and maintainability concerns\n" +
+        "- Naming conventions consistency\n" +
+        "- Potential edge cases or missing validations\n" +
+        "Be concise. Comment only on real issues, not style nitpicks. " +
+        "You also have access to filesystem tools (list_directory, read_file, search_files, git_diff) " +
+        "to read additional project files if needed for context. " +
+        "The project is located at: '" + cwd + "'.";
 
-      let finalContent = null;
-      const activeModel = await getLoadedModel(PREFERRED_DEEPSEEK);
+      const userMessage = `${query}\n\nHere is the git diff:\n\`\`\`\n${diff}\n\`\`\``;
 
-      for (let step = 0; step < MAX_STEPS; step++) {
-        const response = await axios.post(LM_STUDIO_URL, {
-          model: activeModel,
-          messages,
-          temperature: 0.1,
-          tools: FILESYSTEM_TOOLS,
-        }, { timeout: LLM_TIMEOUT });
+      // ── Helper: run one model through the agentic loop ──
+      async function runModel(modelId, label) {
+        const messages = [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ];
+        for (let step = 0; step < MAX_STEPS; step++) {
+          const response = await axios.post(OLLAMA_URL, {
+            model: modelId,
+            messages,
+            temperature: 0.1,
+            tools: FILESYSTEM_TOOLS,
+          }, { timeout: LLM_TIMEOUT });
 
-        const choice = response.data?.choices?.[0];
-        const message = choice?.message;
+          const choice = response.data?.choices?.[0];
+          const message = choice?.message;
+          if (!message) return `[${label}] returned no readable message.`;
 
-        if (!message) {
-          return {
-            content: [{ type: "text", text: "DeepSeek model returned no readable message." }],
-            isError: true,
-          };
-        }
+          messages.push(message);
 
-        messages.push(message);
+          if (
+            choice.finish_reason === "stop" ||
+            (message.content && (!message.tool_calls || message.tool_calls.length === 0))
+          ) {
+            return message.content || "";
+          }
 
-        if (
-          choice.finish_reason === "stop" ||
-          (message.content && (!message.tool_calls || message.tool_calls.length === 0))
-        ) {
-          finalContent = message.content || "";
-          break;
-        }
-
-        if (message.tool_calls && message.tool_calls.length > 0) {
-          for (const toolCall of message.tool_calls) {
-            const fnName = toolCall.function.name;
-            let fnArgs;
-            try {
-              fnArgs = JSON.parse(toolCall.function.arguments);
-            } catch {
-              fnArgs = {};
+          if (message.tool_calls?.length > 0) {
+            for (const toolCall of message.tool_calls) {
+              let fnArgs;
+              try { fnArgs = JSON.parse(toolCall.function.arguments); } catch { fnArgs = {}; }
+              console.error(`[${label} Step ${step + 1}] Tool call: ${toolCall.function.name}(${JSON.stringify(fnArgs)})`);
+              messages.push({
+                role: "tool",
+                tool_call_id: toolCall.id,
+                content: executeToolCall(toolCall.function.name, fnArgs),
+              });
             }
-
-            console.error(`[code_feedback Step ${step + 1}] Tool call: ${fnName}(${JSON.stringify(fnArgs)})`);
-            const result = executeToolCall(fnName, fnArgs);
-
-            messages.push({
-              role: "tool",
-              tool_call_id: toolCall.id,
-              content: result,
-            });
           }
         }
+        return `[${label}] reached max steps without a final answer.`;
       }
 
-      if (finalContent === null) {
-        return {
-          content: [{ type: "text", text: "DeepSeek model reached max steps without a final answer." }],
-          isError: true,
-        };
-      }
+      // ── Run both models in parallel ──
+      const [deepseekModel, coderModel] = await Promise.all([
+        getLoadedModel(PREFERRED_DEEPSEEK),
+        getLoadedModel(PREFERRED_MODEL),
+      ]);
 
-      return { content: [{ type: "text", text: finalContent }] };
+      const [deepseekResult, coderResult] = await Promise.all([
+        runModel(deepseekModel, "DeepSeek-R1 (reasoning)"),
+        runModel(coderModel, "Qwen3-Coder (patterns)"),
+      ]);
+
+      const combined =
+        `## DeepSeek-R1 — Bugs & Edge Cases\n\n${deepseekResult}\n\n` +
+        `---\n\n## Qwen3-Coder — Patterns & Code Quality\n\n${coderResult}`;
+
+      return { content: [{ type: "text", text: combined }] };
     } catch (error) {
-      let errorMessage = "Unknown error communicating with LM Studio.";
+      let errorMessage = "Unknown error communicating with Ollama.";
       if (axios.isAxiosError(error)) {
-        errorMessage = `LM Studio Error: ${error.response?.data?.error?.message || error.message}. Is LM Studio running with the DeepSeek model loaded?`;
+        errorMessage = `Ollama Error: ${error.response?.data?.error?.message || error.message}. Is Ollama running on port 11434?`;
       } else if (error instanceof Error) {
         errorMessage = `Internal Error: ${error.message}`;
       }
@@ -583,7 +577,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function run() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("LM Studio Docs, Git Review & Code Feedback MCP Server v1.3 running.");
+  console.error("Ollama Docs, Git Review & Code Feedback MCP Server v1.4 running.");
 }
 
 run().catch((error) => {
